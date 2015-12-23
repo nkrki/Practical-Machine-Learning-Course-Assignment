@@ -10,13 +10,13 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 ##Loading and Creating Validation Set
 Let us Load the data, create a validation data set and start looking at it
 
-```{r, echo=TRUE, results='hide', fig.show='hide', warning=FALSE}
+
+```{r, echo=FALSE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
 pmlTraining <- read.csv("C:/Users/565864/Desktop/Data Scientist Course/Practical Machine Learning/Notes/pml-training.csv")
 pmlTesting <- read.csv("C:/Users/565864/Desktop/Data Scientist Course/Practical Machine Learning/Notes/pml-testing.csv")
 library(caret); set.seed(123)
 inTrain <- createDataPartition(y = pmlTraining$classe, p = 0.7, list = FALSE)
-pmlTraining <- pmlTraining[inTrain, ]
-pmlValidation <- pmlTraining[-inTrain, ]
+pmlTraining <- pmlTraining[inTrain, ]; pmlValidation <- pmlTraining[-inTrain, ]
 str(pmlTraining)
 ```
 
@@ -27,7 +27,9 @@ Before that, we should remove columns with too many NAs. Looping through all the
 
 Also, there are columns with Names timestamps and windows. Removing them and retaining the raw time stamps
 
-```{r, echo=TRUE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
+
+
+```{r, echo=FALSE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
 pmlTraining <- pmlTraining[, -c(1:6)]
 pmlValidation <- pmlValidation[, -c(1:6)]
 pmlTesting <- pmlTesting[, -c(1:6)]
@@ -48,7 +50,7 @@ pmlTesting <- pmlTesting[, -rownum]
 
 The variable number is now 86. Now, we will look at the correlation matrix and see if there is a lot of correlation among the continuous variables and categorical variables.
 
-```{r, echo=TRUE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
+```{r, echo=FALSE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
 cor(pmlTraining[sapply(pmlTraining, is.numeric)])
 cor(sapply(pmlTraining[sapply(pmlTraining, is.factor)], as.numeric))
 ```
@@ -57,7 +59,7 @@ The correlations look not that bad but, there are a few places where correlation
 
 In fact, while trying to build model(s) using glm or other Tree techniques, it takes a very long while and then returns nothing. It could be due to the number of variables. One more step that could be done and we will do it below is to remove the variables which are near zero and might not be contributing anything to the model. Finding Near Zero values using Training data and removing the same columns from Validation and Test data sets
 
-```{r, echo=TRUE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
+```{r, echo=FALSE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
 nsv <- nearZeroVar(pmlTraining)
 pmlTraining <- pmlTraining[, -nsv]
 pmlValidation <- pmlValidation[, -nsv]
@@ -66,7 +68,7 @@ pmlTesting <- pmlTesting[, -nsv]
 
 Actually this activity has removed all the Factor Variables and the variable count is now down to 53!! All the variables such as kurtosis, skewness, have been removed. We will once again look at correlation matrix and see if there is a case for Dimension Reduction using PCA or Factor Analysis
 
-```{r, echo=TRUE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
+```{r, echo=FALSE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
 cor(pmlTraining[sapply(pmlTraining, is.numeric)])
 ```
 
@@ -75,23 +77,24 @@ A look at the correlation matrix suggested that there is no need to further fact
 ##Exploratory Data Analysis
 Let us try plotting a few graphs and see the nature of Distribution of classe variable against other variables. That could give us an indication of the kind of model we could be trying
 
-```{r, echo=TRUE, message = FALSE, warning=FALSE}
+```{r, echo=FALSE, message = FALSE, warning=FALSE}
 qplot(roll_belt, pitch_belt, colour = classe, data = pmlTraining)
 qplot(pitch_arm, yaw_arm, colour = classe, data = pmlTraining)
 ```
 
-From the above plots, data definitely does not look linear or gaussian. From this it is clear that trees are the best way forward. Linear or even Non-Linear Models would find it very difficult to classify
+
+From the above plots, data definitely does not look linear or gaussian. From this it is clear that trees are the best way forward. Linear or even Non-Linear Models would find it very difficult to classify. We could still give it a try
 
 
 ##Model Building
 Let us build multiple models using multiple techniques and see which performs the best in the Training and the Validation data sets
+
 **Model using Logistic Regression**
-This is just as a starting point. However, glm does not run while running on a normal R file and hence, has not been included here. The main reason for selecting Trees over glm in this case is lesser restrictions (for example gaussian or linearity assumption) for the variables with Tree Models compared to Logistic Regression or Linear Discriminant Analysis. This was anyway not true when we looked at the qplot where we found that linearity assumption was not true.
-We will use 3 tree models to see which one performs the best - Classification or Decision Tree, Random Forests and Bossting with Trees (gbm)
+This is just as a starting point. However, glm does not run while running on a normal R file and hence, has not been included here. We will use 3 tree models to see which one performs the best - Classification or Decision Tree, Random Forests and Bossting with Trees (gbm)
 
 **Model using Classification Trees**
 
-```{r, echo=TRUE, fig.show='hide', message = FALSE, warning=FALSE}
+```{r, echo=FALSE, fig.show='hide', message = FALSE, warning=FALSE}
 modFit2 <- train(classe ~ ., data = pmlTraining, method = "rpart")
 confusionMatrix(predict(modFit2, pmlValidation), pmlValidation$classe)
 ```
@@ -100,7 +103,7 @@ The accuracy seems really bad with a Decision tree with an accuracy of 61.02% on
 
 **Model using Random Forests**
 
-```{r, echo=TRUE, fig.show='hide', message = FALSE, warning=FALSE}
+```{r, echo=FALSE, fig.show='hide', message = FALSE, warning=FALSE}
 library(randomForest)
 modFit3 <- randomForest(classe ~ ., data = pmlTraining, importance = FALSE)
 confusionMatrix(predict(modFit3, pmlValidation), pmlValidation$classe)
@@ -110,7 +113,7 @@ The accuracy seems unbelievable - it has given a 100% accuracy for in-sample and
 
 **Model using Boosting with Trees**
 
-```{r, echo=TRUE, fig.show='hide', message = FALSE, warning=FALSE}
+```{r, echo=FALSE, fig.show='hide', message = FALSE, warning=FALSE}
 modFit4 <- train(classe ~ ., data = pmlTraining, method = "gbm", verbose = FALSE)
 confusionMatrix(predict(modFit4, pmlValidation), pmlValidation$classe)
 ```
@@ -119,7 +122,7 @@ The accuracy seems better than a Decision Tree with 99.32% out of sample accurac
 
 Since Random Forests gives the best estimate of the out of sample error (unbelievable one at that), we will use the Random Forests model to predict the classe variable for the Test Data
 
-```{r, echo=TRUE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
+```{r, echo=FALSE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
 setwd("C:/Users/565864/Desktop/Data Scientist Course/Practical Machine Learning/Notes/Assignment_Prediction")
 answers <- predict(modFit3, newdata = pmlTesting)
 pml_write_files <- function(x){
