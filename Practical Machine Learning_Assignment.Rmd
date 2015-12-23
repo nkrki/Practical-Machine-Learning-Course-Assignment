@@ -1,0 +1,136 @@
+---
+title: "Practical Machine Learning_Assignment"
+author: "Naga Krishna Kiran Jujhala"
+date: "December 23, 2015"
+output: html_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+##Loading and Creating Validation Set
+Let us Load the data, create a validation data set and start looking at it
+
+```{r, echo=TRUE, results='hide', fig.show='hide', warning=FALSE}
+pmlTraining <- read.csv("C:/Users/565864/Desktop/Data Scientist Course/Practical Machine Learning/Notes/pml-training.csv")
+pmlTesting <- read.csv("C:/Users/565864/Desktop/Data Scientist Course/Practical Machine Learning/Notes/pml-testing.csv")
+library(caret); set.seed(123)
+inTrain <- createDataPartition(y = pmlTraining$classe, p = 0.7, list = FALSE)
+pmlTraining <- pmlTraining[inTrain, ]
+pmlValidation <- pmlTraining[-inTrain, ]
+str(pmlTraining)
+```
+
+##Variable Reduction
+Looks like the number of variables is large - 159, so there could be a case of using dimension reduction. 
+
+Before that, we should remove columns with too many NAs. Looping through all the columns from Training set and identifying those columns which either have all NAs or more than 70% of the data as NAs. Storing those row numbers in order to remove the same set of rows from Validation and Test sets.
+
+Also, there are columns with Names timestamps and windows. Removing them and retaining the raw time stamps
+
+```{r, echo=TRUE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
+pmlTraining <- pmlTraining[, -c(1:6)]
+pmlValidation <- pmlValidation[, -c(1:6)]
+pmlTesting <- pmlTesting[, -c(1:6)]
+rownum <- vector()
+for(i in 1:ncol(pmlTraining)){
+  compCols <- table(complete.cases(pmlTraining[, i]))
+  if(!compCols[["TRUE"]] == nrow(pmlTraining)){
+    if(compCols[["FALSE"]] == nrow(pmlTraining) | 
+       (compCols[["FALSE"]] / compCols[["TRUE"]]) > 0.7) {
+      rownum <- c(rownum, i)
+    } 
+  }
+}
+pmlTraining <- pmlTraining[, -rownum]
+pmlValidation <- pmlValidation[, -rownum]
+pmlTesting <- pmlTesting[, -rownum]
+```
+
+The variable number is now 86. Now, we will look at the correlation matrix and see if there is a lot of correlation among the continuous variables and categorical variables.
+
+```{r, echo=TRUE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
+cor(pmlTraining[sapply(pmlTraining, is.numeric)])
+cor(sapply(pmlTraining[sapply(pmlTraining, is.factor)], as.numeric))
+```
+
+The correlations look not that bad but, there are a few places where correlations are high. Let us see if we can build any model using the current data as it is....
+
+In fact, while trying to build model(s) using glm or other Tree techniques, it takes a very long while and then returns nothing. It could be due to the number of variables. One more step that could be done and we will do it below is to remove the variables which are near zero and might not be contributing anything to the model. Finding Near Zero values using Training data and removing the same columns from Validation and Test data sets
+
+```{r, echo=TRUE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
+nsv <- nearZeroVar(pmlTraining)
+pmlTraining <- pmlTraining[, -nsv]
+pmlValidation <- pmlValidation[, -nsv]
+pmlTesting <- pmlTesting[, -nsv]
+```
+
+Actually this activity has removed all the Factor Variables and the variable count is now down to 53!! All the variables such as kurtosis, skewness, have been removed. We will once again look at correlation matrix and see if there is a case for Dimension Reduction using PCA or Factor Analysis
+
+```{r, echo=TRUE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
+cor(pmlTraining[sapply(pmlTraining, is.numeric)])
+```
+
+A look at the correlation matrix suggested that there is no need to further factorize the variables. So, we will stick on and continue to Exploratory Data Analysis and Model Building....
+
+##Exploratory Data Analysis
+Let us try plotting a few graphs and see the nature of Distribution of classe variable against other variables. That could give us an indication of the kind of model we could be trying
+
+```{r, echo=TRUE, message = FALSE, warning=FALSE}
+qplot(roll_belt, pitch_belt, colour = classe, data = pmlTraining)
+qplot(pitch_arm, yaw_arm, colour = classe, data = pmlTraining)
+```
+
+From the above plots, data definitely does not look linear or gaussian. From this it is clear that trees are the best way forward. Linear or even Non-Linear Models would find it very difficult to classify
+
+
+##Model Building
+Let us build multiple models using multiple techniques and see which performs the best in the Training and the Validation data sets
+**Model using Logistic Regression**
+This is just as a starting point. However, glm does not run while running on a normal R file and hence, has not been included here. The main reason for selecting Trees over glm in this case is lesser restrictions (for example gaussian or linearity assumption) for the variables with Tree Models compared to Logistic Regression or Linear Discriminant Analysis. This was anyway not true when we looked at the qplot where we found that linearity assumption was not true.
+We will use 3 tree models to see which one performs the best - Classification or Decision Tree, Random Forests and Bossting with Trees (gbm)
+
+**Model using Classification Trees**
+
+```{r, echo=TRUE, fig.show='hide', message = FALSE, warning=FALSE}
+modFit2 <- train(classe ~ ., data = pmlTraining, method = "rpart")
+confusionMatrix(predict(modFit2, pmlValidation), pmlValidation$classe)
+```
+
+The accuracy seems really bad with a Decision tree with an accuracy of 61.02% on the Validation Set. This was expected after looking at the above plot. Intution says it would be difficult to break into various nodes as there is so much overlap. Now to the other 2 Tree Models
+
+**Model using Random Forests**
+
+```{r, echo=TRUE, fig.show='hide', message = FALSE, warning=FALSE}
+library(randomForest)
+modFit3 <- randomForest(classe ~ ., data = pmlTraining, importance = FALSE)
+confusionMatrix(predict(modFit3, pmlValidation), pmlValidation$classe)
+```
+
+The accuracy seems unbelievable - it has given a 100% accuracy for in-sample and out of sample. Hope something is not wrong in it!!!! This gives similar results p = 0.5 when it was tried separately. Could have stopped here but, since we started and said in the beginning, let us see how boosting performs
+
+**Model using Boosting with Trees**
+
+```{r, echo=TRUE, fig.show='hide', message = FALSE, warning=FALSE}
+modFit4 <- train(classe ~ ., data = pmlTraining, method = "gbm", verbose = FALSE)
+confusionMatrix(predict(modFit4, pmlValidation), pmlValidation$classe)
+```
+
+The accuracy seems better than a Decision Tree with 99.32% out of sample accuracy. However, this is a little worse than Random Forests. Boosting with trees and Random Forests in fact seems to be performing so well on an out of sample test that there is no need to look at combining models (who would do it after such results)
+
+Since Random Forests gives the best estimate of the out of sample error (unbelievable one at that), we will use the Random Forests model to predict the classe variable for the Test Data
+
+```{r, echo=TRUE, results='hide', fig.show='hide', message = FALSE, warning=FALSE}
+setwd("C:/Users/565864/Desktop/Data Scientist Course/Practical Machine Learning/Notes/Assignment_Prediction")
+answers <- predict(modFit3, newdata = pmlTesting)
+pml_write_files <- function(x){
+  n <- length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(answers)
+answers2 <- predict(modFit4, newdata = pmlTesting)
+```
+
+Verified with gbm as well and the predictions seem to be the same. With some level of confidence, completed the submission and it does seem true. The model using Random Forests has given the best accuracy which was expected due to the way Random Forests builds the model
